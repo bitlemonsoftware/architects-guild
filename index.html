@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Why this loop is 10x slower — and how to fix it</title>
+<title>Why this loop is 5x slower, and how to fix it</title>
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -302,11 +302,11 @@
 
   <div class="eyebrow">Cache performance · C++</div>
 
-  <h1>Why this loop is <em>10× slower</em> — same logic, different memory order</h1>
+  <h1>Why this loop is <em>5× slower</em> - same logic, different memory order</h1>
 
   <p class="intro">
-    Two functions. Same matrix. Same number of additions. One takes ~50 ms, the other ~500 ms.
-    The difference has nothing to do with your algorithm — it's about whether the hardware can keep up with you.
+    Two functions, same matrix, same number of additions. One takes ~50 ms, the other ~250 ms.
+    The difference has nothing to do with the algorithm, it's about how memory is accessed.
   </p>
 
   <!-- ---- THE CODE ---- -->
@@ -315,14 +315,14 @@
   <div class="code-wrap">
     <div class="code-label">
       <span class="dot dot-good"></span>
-      Version A — row-major traversal (cache-friendly)
+      Version A: row-major traversal (cache-friendly)
     </div>
     <pre><span class="kw">void</span> <span class="fn">traverseRowMajor</span>()
 {
     <span class="typ">double</span> sum = <span class="num">0.0</span>;
-    <span class="kw">for</span> (<span class="typ">int</span> row = <span class="num">0</span>; row &lt; kMatrixSize; ++row)
-        <span class="kw">for</span> (<span class="typ">int</span> col = <span class="num">0</span>; col &lt; kMatrixSize; ++col)
-            sum += gMatrix[row][col];  <span class="cmt">// walks memory in order</span>
+    <span class="kw">for</span> (<span class="typ">int</span> row = <span class="num">0</span>; row &lt; MATRIX_SIZE; ++row)
+        <span class="kw">for</span> (<span class="typ">int</span> col = <span class="num">0</span>; col &lt; MATRIX_SIZE; ++col)
+            sum += matrix[row][col];  <span class="cmt">// walks memory in order</span>
     gSink = sum;
 }</pre>
   </div>
@@ -330,14 +330,14 @@
   <div class="code-wrap">
     <div class="code-label">
       <span class="dot dot-bad"></span>
-      Version B — column-major traversal (cache-unfriendly)
+      Version B: column-major traversal (cache-unfriendly)
     </div>
     <pre><span class="kw">void</span> <span class="fn">traverseColumnMajor</span>()
 {
     <span class="typ">double</span> sum = <span class="num">0.0</span>;
-    <span class="kw">for</span> (<span class="typ">int</span> col = <span class="num">0</span>; col &lt; kMatrixSize; ++col)
-        <span class="kw">for</span> (<span class="typ">int</span> row = <span class="num">0</span>; row &lt; kMatrixSize; ++row)
-            sum += gMatrix[row][col];  <span class="cmt">// jumps 32 KB forward each step</span>
+    <span class="kw">for</span> (<span class="typ">int</span> col = <span class="num">0</span>; col &lt; MATRIX_SIZE; ++col)
+        <span class="kw">for</span> (<span class="typ">int</span> row = <span class="num">0</span>; row &lt; MATRIX_SIZE; ++row)
+            sum += matrix[row][col];  <span class="cmt">// jumps forward in memory each step</span>
     gSink = sum;
 }</pre>
   </div>
@@ -349,15 +349,15 @@
     <h2>What the cache sees</h2>
 
     <p>
-      C++ stores 2D arrays in <strong style="color:#e6edf3;">row-major order</strong> — all of row 0 first, then row 1, then row 2.
+      C++ stores 2D arrays in <strong style="color:#e6edf3;">row-major order.</strong> All of row 0 first, then row 1, then row 2.
       A cache line is 64 bytes, which holds <strong style="color:#e6edf3;">8 doubles</strong>.
-      So fetching <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">matrix[0][0]</code> automatically loads <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">[0][1]</code> through <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">[0][7]</code> into the cache for free.
+      So fetching <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">matrix[0][0]</code> automatically loads <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">matrix[0][1]</code> through <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">matrix[0][7]</code> into the cache for free.
     </p>
 
-    <p style="margin-bottom:1.25rem;">Here's what each traversal pattern looks like across a full 8×8 matrix — exactly one cache line wide, exactly one cache line tall:</p>
+    <p style="margin-bottom:1.25rem;">Here's what each traversal pattern looks like across a full 8×8 matrix:</p>
 
     <!-- Row-major diagram: 8x8, each row is one full cache line fetch -->
-    <p style="font-size:12px;color:#3fb950;font-weight:600;margin-bottom:6px;">▸ Row-major: one cache line fetch covers an entire row — 7 free rides per miss</p>
+    <p style="font-size:12px;color:#3fb950;font-weight:600;margin-bottom:6px;">▸ Row-major: one cache line fetch covers an entire row - 7 free accesses per miss</p>
     <div class="diagram-grid">
       <div class="mem-row">
         <span class="row-label">row 0</span>
@@ -393,12 +393,12 @@
       </div>
     </div>
     <p class="diagram-caption">
-      Each row = one cache line fetch (64 bytes = 8 doubles). The bright green cell is the access that triggers the fetch.
-      The 7 cells beside it come along <strong style="color:#3fb950;">for free</strong>. Total fetches for this matrix: 8. Total accesses: 64. <strong style="color:#3fb950;">1 miss per 8 accesses.</strong>
+      Each row = one cache line fetch (64 bytes = 8 doubles). The bright green cell is the access that triggers the fetch from main memory.
+      The 7 cells beside it come along <strong style="color:#3fb950;">for free</strong>. Total fetches for this 8x8 matrix: 8. Total accesses: 64. <strong style="color:#3fb950;">Total misses: 8.</strong>
     </p>
 
     <!-- Column-major diagram: 8x8, each column access is a separate miss -->
-    <p style="font-size:12px;color:#f85149;font-weight:600;margin-bottom:6px;margin-top:1.75rem;">▸ Column-major: every access lands in a different cache line — nothing is ever reused</p>
+    <p style="font-size:12px;color:#f85149;font-weight:600;margin-bottom:6px;margin-top:1.75rem;">▸ Column-major: every access lands in a different cache line - nothing is ever reused</p>
     <div class="diagram-grid">
       <div class="mem-row">
         <span class="row-label">row 0</span>
@@ -434,8 +434,8 @@
       </div>
     </div>
     <p class="diagram-caption">
-      Column 0 is accessed top-to-bottom. Each access is 32,768 bytes from the last — a brand new cache line every time.
-      The 7 grey cells fetched alongside each red cell are <strong style="color:#f85149;">never touched</strong> and get evicted. Total fetches: 64. Total accesses: 64. <strong style="color:#f85149;">1 miss per access.</strong>
+      Column 0 is accessed top-to-bottom. Each access is far away from the last - a brand new cache line every time.
+      The 7 grey cells fetched alongside each red cell (on the same row) are <strong style="color:#f85149;">never touched</strong> and get evicted. Total fetches: 64. Total accesses: 64. <strong style="color:#f85149;">Total misses: 64.</strong>
     </p>
 
     <div class="legend">
@@ -447,7 +447,7 @@
   </div>
 
   <!-- ---- RESULTS ---- -->
-  <h2>Measured results — 4096×4096 matrix, 5 runs avg</h2>
+  <h2>Measured results — 4096×4096 matrix, 5 runs average</h2>
 
   <div class="result-grid">
     <div class="result-card good">
@@ -457,17 +457,17 @@
     </div>
     <div class="result-card bad">
       <div class="result-label">Column-major ✗</div>
-      <div class="result-time">~500 ms</div>
+      <div class="result-time">~250 ms</div>
       <div class="result-sub">cache miss on every access</div>
     </div>
   </div>
 
-  <div class="speedup-badge">10× faster — zero algorithmic changes</div>
+  <div class="speedup-badge">5× faster - no algorithmic changes, just the memory access order</div>
 
   <p>
     Both versions execute exactly the same number of floating-point additions.
-    The CPU is not doing less work in version A — it's doing the <em>same</em> work
-    without waiting for RAM on every single step.
+    The CPU is not doing less work in version A, it's doing the <em>same</em> work
+    without waiting for RAM on every single memory access.
   </p>
 
   <!-- ---- WHY ---- -->
@@ -476,17 +476,17 @@
   <div class="explainer">
     <div class="explainer-title"><span class="icon-good">●</span> Row-major: riding the cache line</div>
     <p>
-      When you access <code style="font-size:12px;">gMatrix[row][col]</code>, the CPU fetches a full 64-byte cache line from RAM —
-      that's 8 doubles in a row. The next 7 iterations access those same bytes, already warm in L1 cache (latency: ~1 ns).
+      When you access <code style="font-size:12px;">matrix[row][col]</code>, the CPU fetches a full 64-byte cache line from RAM -
+      that's 8 doubles in a row. The next 7 iterations access those same bytes, already in one of the caches (latency: ~1 ns).
       You pay the RAM cost once and amortize it over 8 operations.
     </p>
   </div>
 
   <div class="explainer">
-    <div class="explainer-title"><span class="icon-bad">●</span> Column-major: paying the RAM tax every step</div>
+    <div class="explainer-title"><span class="icon-bad">●</span> Column-major: RAM access latency on every step</div>
     <p>
-      Accessing <code style="font-size:12px;">gMatrix[row][col]</code> with the column as the outer loop means the next access
-      is <code style="font-size:12px;">gMatrix[row+1][col]</code> — which is kMatrixSize×8 = 32,768 bytes away in a 4096-wide matrix.
+      Accessing <code style="font-size:12px;">matrix[row][col]</code> with the column as the outer loop means the next access
+      is <code style="font-size:12px;">matrix[row+1][col]</code>, which is MATRIX_SIZE×8 bytes away. For example, in a 4096x4096 matrix, this is 32,768 bytes apart.
       That's a completely different cache line. The one you just loaded gets evicted unused.
       Every access costs a full RAM round-trip (~100 ns).
     </p>
@@ -496,35 +496,36 @@
   <div class="takeaway">
     <h2>The takeaway</h2>
     <p>
-      <strong>The hardware doesn't fetch single values — it fetches 64-byte cache lines.</strong>
-      Code that accesses memory in the order it was laid out gets 7 values for the price of 1.
+      <strong>The hardware doesn't fetch single values - it fetches 64-byte cache lines.</strong>
+      Code that accesses memory in the order it was laid out gets 8 values for the price of 1.
       Code that skips around pays full price every time.
     </p>
     <p>
-      This is why knowing your data layout matters as much as knowing your algorithm.
-      A 10× difference in a tight loop is not an edge case — it's what happens every time
-      memory access patterns are ignored.
+      This is why knowing the data layout matters as much as knowing the algorithm.
+      A 5× slower code might happen every time if memory access patterns are ignored.
     </p>
     <p>
       <strong>Rule of thumb:</strong> in C/C++, always iterate over the last (rightmost) index in the inner loop.
-      That's the direction memory is laid out.
+      That's the direction memory is stored.
     </p>
   </div>
 
   <!-- ---- TRY IT ---- -->
   <h2>Try it yourself</h2>
   <p>
-    The companion <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">cache_example.cpp</code> file has the full runnable code with in-code timing
+    Download
+    <a href="https://raw.githubusercontent.com/bitlemonsoftware/architects-guild/refs/heads/main/RowColumnMajor.cpp" download> RowColumnMajor.cpp</a>.
+    This file has the full code with time measurements
     using <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">std::chrono::high_resolution_clock</code>.
-    Compile with <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">g++ -O2 -o cacheExample cache_example.cpp</code> and run it — the numbers will vary by machine but the ratio holds.
+    Compile and run it. The numbers will vary by machine but the ratio should hold.
   </p>
   <p>
-    Try changing <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">kMatrixSize</code> from 4096 to 512 and watch the gap shrink — smaller matrices fit more easily
+    Try changing <code style="font-size:12px;background:#161b22;padding:1px 5px;border-radius:3px;border:1px solid #30363d;">MATRIX_SIZE</code> from 4096 to 512 and watch the gap shrink. Smaller matrices fit more easily
     in L2/L3 cache, so the miss penalty is less severe. That's the cache hierarchy in action.
   </p>
 
   <div class="post-footer">
-    <p>Part of <strong>Write Hardware-Friendly Code</strong> — a course on making C/C++ faster by understanding what the hardware is actually doing.</p>
+    <p>Part of <strong>Write Hardware-Friendly Code</strong> - a course on making C/C++ faster by understanding what the hardware is actually doing.</p>
   </div>
 
 </article>

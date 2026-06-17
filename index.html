@@ -486,7 +486,7 @@
       Accessing <code style="font-size:12px;">matrix[row][col]</code> with the column as the outer loop means the next access
       is <code style="font-size:12px;">matrix[row+1][col]</code>, which is MATRIX_SIZE×8 bytes away. For example, in a 4096x4096 matrix, this is 32,768 bytes apart.
       That's a completely different cache line. The one you just loaded gets evicted unused.
-      Every access costs a full RAM round-trip (~100 ns).
+      Every access costs a full RAM round-trip.
     </p>
   </div>
 

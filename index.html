@@ -433,7 +433,8 @@
     </div>
     <p class="diagram-caption">
       Column 0 is accessed top-to-bottom. Each access is far away from the last - a brand new cache line every time.
-      The 7 grey cells fetched alongside each red cell (on the same row) are <strong style="color:#f85149;">never touched</strong> and get evicted. Total fetches: 64. Total accesses: 64. <strong style="color:#f85149;">Total misses: 64.</strong>
+      The 7 grey cells fetched alongside each red cell (on the same row) are <strong style="color:#f85149;">not touched</strong>. 
+      In a small 8x8 matrix, the subsequent accesses of next columns will be cache hits, but in a larger matrix, <strong style="color:#f85149;">the cache will miss on every memory access</strong>.
     </p>
 
     <div class="legend">
